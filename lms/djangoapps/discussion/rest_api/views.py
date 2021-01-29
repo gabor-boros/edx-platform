@@ -5,9 +5,9 @@ Discussion API views
 
 import logging
 
-from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.utils.decorators import method_decorator
 from edx_rest_framework_extensions.auth.jwt.authentication import JwtAuthentication
 from edx_rest_framework_extensions.auth.session.authentication import SessionAuthenticationAllowInactiveUser
 from opaque_keys.edx.keys import CourseKey
@@ -48,6 +48,7 @@ from lms.djangoapps.discussion.rest_api.serializers import (
     DiscussionRolesSerializer,
     DiscussionSettingsSerializer
 )
+from lms.djangoapps.discussion.rest_api.utils import discussion_accessible
 from openedx.core.djangoapps.django_comment_common import comment_client
 from openedx.core.djangoapps.django_comment_common.models import Role
 from openedx.core.djangoapps.django_comment_common.utils import (
@@ -335,6 +336,7 @@ class ThreadViewSet(DeveloperErrorViewMixin, ViewSet):
         requested_fields = request.GET.get('requested_fields')
         return Response(get_thread(request, thread_id, requested_fields))
 
+    @method_decorator(discussion_accessible('threads'))
     def create(self, request):
         """
         Implements the POST method for the list endpoint as described in the
@@ -526,6 +528,7 @@ class CommentViewSet(DeveloperErrorViewMixin, ViewSet):
             form.cleaned_data["requested_fields"],
         )
 
+    @method_decorator(discussion_accessible('comments'))
     def create(self, request):
         """
         Implements the POST method for the list endpoint as described in the
