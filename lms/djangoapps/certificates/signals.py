@@ -2,7 +2,6 @@
 Signal handler for enabling/disabling self-generated certificates based on the course-pacing.
 """
 
-
 import logging
 
 import six
@@ -10,13 +9,16 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from common.djangoapps.course_modes.models import CourseMode
+from common.djangoapps.student.models import CourseEnrollment
+from lms.djangoapps.certificates.generation_handler import generate_allowlist_certificate_task, \
+    is_using_certificate_allowlist_and_is_on_allowlist
 from lms.djangoapps.certificates.models import (
     CertificateGenerationCourseSetting,
     CertificateStatuses,
     CertificateWhitelist,
     GeneratedCertificate
 )
-from lms.djangoapps.certificates.tasks import generate_certificate
+from lms.djangoapps.certificates.tasks import CERTIFICATE_DELAY_SECONDS, generate_certificate
 from lms.djangoapps.grades.api import CourseGradeFactory
 from lms.djangoapps.verify_student.services import IDVerificationService
 from openedx.core.djangoapps.certificates.api import auto_certificate_generation_enabled
@@ -27,10 +29,8 @@ from openedx.core.djangoapps.signals.signals import (
     COURSE_GRADE_NOW_PASSED,
     LEARNER_NOW_VERIFIED
 )
-from common.djangoapps.student.models import CourseEnrollment
 
 log = logging.getLogger(__name__)
-CERTIFICATE_DELAY_SECONDS = 2
 
 
 @receiver(COURSE_PACING_CHANGED, dispatch_uid="update_cert_settings_on_pacing_change")
@@ -148,6 +148,15 @@ def fire_ungenerated_certificate_task(user, course_key, expected_verification_st
 
     message = u'Entered into Ungenerated Certificate task for {user} : {course}'
     log.info(message.format(user=user.id, course=course_key))
+
+    if is_using_certificate_allowlist_and_is_on_allowlist(user, course_key):
+        log.info('{course} is using allowlist certificates, and the user {user} is on its allowlist. Attempt will be '
+                 'made to generate an allowlist certificate.'.format(course=course_key, user=user.id))
+        generate_allowlist_certificate_task(user, course_key)
+        return
+
+    log.info('{course} is not using allowlist certificates (or user {user} is not on its allowlist). The normal '
+             'generation logic will be followed.'.format(course=course_key, user=user.id))
 
     allowed_enrollment_modes_list = [
         CourseMode.VERIFIED,
